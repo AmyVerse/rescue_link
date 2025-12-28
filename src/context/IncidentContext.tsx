@@ -5,7 +5,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { CreateIncidentPayload, Incident } from "../services/api";
+import type {
+  CreateIncidentPayload,
+  CreateIncidentResponse,
+  Incident,
+} from "../services/api";
 import { api, socketService } from "../services/api";
 
 interface IncidentContextType {
@@ -13,7 +17,9 @@ interface IncidentContextType {
   loading: boolean;
   error: string | null;
   userLocation: { lat: number; lng: number } | null;
-  createIncident: (payload: CreateIncidentPayload) => Promise<Incident>;
+  createIncident: (
+    payload: CreateIncidentPayload
+  ) => Promise<CreateIncidentResponse>;
   confirmIncident: (id: string) => Promise<void>;
   markFalse: (id: string) => Promise<void>;
   refreshIncidents: () => Promise<void>;
