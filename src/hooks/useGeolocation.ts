@@ -24,8 +24,9 @@ export const useGeolocation = (requestOnMount = true) => {
   // Reverse geocode to get address
   const reverseGeocode = async (lat: number, lng: number) => {
     try {
+      const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
       const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=pk.eyJ1IjoiYW15amkiLCJhIjoiY21qcGdvbGoyM2ZrcDNlcXpnbjcwenIwcSJ9.AGLOZqEvAhUuNPPl-AsbpQ&types=locality,place,neighborhood`
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxToken}&types=locality,place,neighborhood`
       );
       const data = await response.json();
       if (data.features && data.features.length > 0) {
