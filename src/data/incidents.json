@@ -1,0 +1,52 @@
+[
+  {
+    "id": "INC001",
+    "title": "Medical Emergency - Heart Attack",
+    "description": "Patient experiencing chest pain and difficulty breathing at residential area",
+    "severity": "critical",
+    "latitude": 28.6139,
+    "longitude": 77.209,
+    "timestamp": "2025-12-28T10:00:00.000Z",
+    "responders": 3
+  },
+  {
+    "id": "INC002",
+    "title": "Vehicle Accident",
+    "description": "Multi-vehicle collision on highway. 2 casualties reported.",
+    "severity": "high",
+    "latitude": 28.5355,
+    "longitude": 77.391,
+    "timestamp": "2025-12-28T09:50:00.000Z",
+    "responders": 5
+  },
+  {
+    "id": "INC003",
+    "title": "Fire in Commercial Building",
+    "description": "Small fire detected on 3rd floor. Building evacuated.",
+    "severity": "high",
+    "latitude": 28.7041,
+    "longitude": 77.1025,
+    "timestamp": "2025-12-28T09:40:00.000Z",
+    "responders": 8
+  },
+  {
+    "id": "INC004",
+    "title": "Fall Injury - Senior Citizen",
+    "description": "Elderly person fell at home. Mild head injury.",
+    "severity": "medium",
+    "latitude": 28.6245,
+    "longitude": 77.0855,
+    "timestamp": "2025-12-28T09:30:00.000Z",
+    "responders": 2
+  },
+  {
+    "id": "INC005",
+    "title": "Minor Traffic Congestion",
+    "description": "Traffic backup due to broken traffic signal.",
+    "severity": "low",
+    "latitude": 28.5921,
+    "longitude": 77.258,
+    "timestamp": "2025-12-28T09:20:00.000Z",
+    "responders": 1
+  }
+]
