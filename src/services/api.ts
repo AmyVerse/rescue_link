@@ -1,7 +1,8 @@
 import { io, Socket } from "socket.io-client";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL;
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
+// Use /api for both dev and prod - Vite proxy handles dev, Vercel rewrites handle prod
+const BASE_URL = "/api";
+const SOCKET_URL = "";
 
 // Backend response structure
 export interface BackendIncident {
