@@ -2,7 +2,8 @@ import { Crosshair } from "lucide-react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef } from "react";
-import type { Incident } from "../types/incident";
+import type { Incident } from "../services/api";
+import { getSeverityFromIncident } from "../types/incident";
 
 interface MapProps {
   incidents: Incident[];
@@ -14,7 +15,8 @@ interface MapProps {
 mapboxgl.accessToken =
   "pk.eyJ1IjoiYW15amkiLCJhIjoiY21qcGdvbGoyM2ZrcDNlcXpnbjcwenIwcSJ9.AGLOZqEvAhUuNPPl-AsbpQ";
 
-const getSeverityColor = (severity: string) => {
+const getSeverityColor = (incident: Incident) => {
+  const severity = getSeverityFromIncident(incident);
   switch (severity) {
     case "critical":
       return "#ff0000";
@@ -187,7 +189,7 @@ export const MapComponent: React.FC<MapProps> = ({
 
     incidents.forEach((incident) => {
       if (!markersRef.current.has(incident.id)) {
-        const color = getSeverityColor(incident.severity);
+        const color = getSeverityColor(incident);
 
         const el = document.createElement("div");
         el.className = "incident-marker";
@@ -200,7 +202,7 @@ export const MapComponent: React.FC<MapProps> = ({
         });
 
         const marker = new mapboxgl.Marker({ element: el, anchor: "bottom" })
-          .setLngLat([incident.longitude, incident.latitude])
+          .setLngLat([incident.lng, incident.lat])
           .addTo(map.current!);
 
         markersRef.current.set(incident.id, { marker, element: el });
@@ -214,7 +216,7 @@ export const MapComponent: React.FC<MapProps> = ({
       if (!incident) return;
 
       const isSelected = selectedIncident?.id === id;
-      const color = getSeverityColor(incident.severity);
+      const color = getSeverityColor(incident);
 
       value.element.innerHTML = createPinSvg(color, isSelected);
     });
@@ -230,7 +232,7 @@ export const MapComponent: React.FC<MapProps> = ({
     isRotatingRef.current = true;
 
     map.current.flyTo({
-      center: [selectedIncident.longitude, selectedIncident.latitude],
+      center: [selectedIncident.lng, selectedIncident.lat],
       zoom: 17,
       duration: 1500,
       essential: true,

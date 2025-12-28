@@ -3,59 +3,83 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
+  Flag,
   MapPin,
   MessageCircle,
   Navigation,
   Share2,
+  ThumbsUp,
   Truck,
   Users,
   X,
 } from "lucide-react";
-import type { Incident } from "../types/incident";
+import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { api, type Incident } from "../services/api";
+import type { SeverityLevel } from "../types/incident";
+import { getSeverityFromIncident } from "../types/incident";
 
 interface IncidentDetailModalProps {
   incident: Incident | null;
   onClose: () => void;
+  onUpdate?: (incident: Incident) => void;
   onNavigate: (incident: Incident) => void;
   userLocation: { latitude: number; longitude: number } | null;
 }
 
-const getStatusTimeline = (incident: Incident) => [
-  {
-    id: 1,
-    status: "Reported",
-    description: "Incident reported by a community member",
-    time: incident.timestamp,
-    icon: AlertCircle,
-    completed: true,
-  },
-  {
-    id: 2,
-    status: "Verified",
-    description: "Verified by 3 nearby users",
-    time: new Date(incident.timestamp.getTime() + 5 * 60000),
-    icon: CheckCircle2,
-    completed: true,
-  },
-  {
-    id: 3,
-    status: "Response Dispatched",
-    description: "Emergency services notified and en route",
-    time: new Date(incident.timestamp.getTime() + 12 * 60000),
-    icon: Truck,
-    completed: incident.severity === "critical" || incident.severity === "high",
-  },
-  {
-    id: 4,
-    status: "On Scene",
-    description: "Responders arrived at location",
-    time: null,
-    icon: Users,
-    completed: false,
-  },
-];
+const getStatusTimeline = (incident: Incident) => {
+  const createdAt = incident.createdAt
+    ? new Date(incident.createdAt)
+    : new Date();
+  const severity = getSeverityFromIncident(incident);
+  const isVerified = incident.status === "verified";
 
-const severityColors = {
+  return [
+    {
+      id: 1,
+      status: "Reported",
+      description: `Incident reported by a community member (${
+        incident.confirmations
+      } confirmation${incident.confirmations !== 1 ? "s" : ""})`,
+      time: createdAt,
+      icon: AlertCircle,
+      completed: true,
+    },
+    {
+      id: 2,
+      status: "Verified",
+      description: isVerified
+        ? "Verified by community confirmations"
+        : incident.status === "false"
+        ? "Marked as false report"
+        : "Awaiting verification",
+      time: isVerified ? new Date(createdAt.getTime() + 5 * 60000) : null,
+      icon: CheckCircle2,
+      completed: isVerified,
+    },
+    {
+      id: 3,
+      status: "Response Dispatched",
+      description: "Emergency services notified and en route",
+      time:
+        isVerified && (severity === "critical" || severity === "high")
+          ? new Date(createdAt.getTime() + 12 * 60000)
+          : null,
+      icon: Truck,
+      completed: isVerified && (severity === "critical" || severity === "high"),
+    },
+    {
+      id: 4,
+      status: "On Scene",
+      description: "Responders arrived at location",
+      time: null,
+      icon: Users,
+      completed: false,
+    },
+  ];
+};
+
+const severityColors: Record<SeverityLevel, string> = {
   critical: "bg-red-100 text-red-700 border-red-200",
   high: "bg-orange-100 text-orange-700 border-orange-200",
   medium: "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -66,13 +90,56 @@ export const IncidentDetailModal: React.FC<IncidentDetailModalProps> = ({
   incident,
   onClose,
   onNavigate,
+  onUpdate,
   userLocation,
 }) => {
+  const { isAdmin } = useAuth();
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [isMarkingFalse, setIsMarkingFalse] = useState(false);
+
   if (!incident) return null;
 
-  const timeline = getStatusTimeline(incident);
+  const handleConfirm = async () => {
+    if (isConfirming) return;
+    setIsConfirming(true);
+    try {
+      const updated = await api.confirmIncident(incident.id);
+      // Preserve lat/lng from current incident
+      updated.lat = incident.lat;
+      updated.lng = incident.lng;
+      onUpdate?.(updated);
+    } catch (error) {
+      console.error("Failed to confirm incident:", error);
+      alert("Failed to confirm incident. Please try again.");
+    } finally {
+      setIsConfirming(false);
+    }
+  };
 
-  const formatTime = (date: Date) => {
+  const handleMarkFalse = async () => {
+    if (isMarkingFalse) return;
+    setIsMarkingFalse(true);
+    try {
+      await api.markIncidentFalse(incident.id);
+      // Backend returns {status: "marked false"}, so we construct the updated incident locally
+      const updated: Incident = {
+        ...incident,
+        status: "false",
+      };
+      onUpdate?.(updated);
+    } catch (error) {
+      console.error("Failed to mark incident as false:", error);
+      alert("Failed to mark incident as false. Please try again.");
+    } finally {
+      setIsMarkingFalse(false);
+    }
+  };
+
+  const timeline = getStatusTimeline(incident);
+  const severity = getSeverityFromIncident(incident);
+
+  const formatTime = (date: Date | null) => {
+    if (!date) return "";
     return date.toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",
@@ -80,7 +147,9 @@ export const IncidentDetailModal: React.FC<IncidentDetailModalProps> = ({
     });
   };
 
-  const formatDate = (date: Date) => {
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return "Today";
+    const date = new Date(dateStr);
     const now = new Date();
     const isToday = date.toDateString() === now.toDateString();
     if (isToday) return "Today";
@@ -90,13 +159,12 @@ export const IncidentDetailModal: React.FC<IncidentDetailModalProps> = ({
   const getDistance = () => {
     if (!userLocation) return null;
     const R = 6371;
-    const dLat = ((incident.latitude - userLocation.latitude) * Math.PI) / 180;
-    const dLon =
-      ((incident.longitude - userLocation.longitude) * Math.PI) / 180;
+    const dLat = ((incident.lat - userLocation.latitude) * Math.PI) / 180;
+    const dLon = ((incident.lng - userLocation.longitude) * Math.PI) / 180;
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos((userLocation.latitude * Math.PI) / 180) *
-        Math.cos((incident.latitude * Math.PI) / 180) *
+        Math.cos((incident.lat * Math.PI) / 180) *
         Math.sin(dLon / 2) *
         Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
@@ -129,20 +197,20 @@ export const IncidentDetailModal: React.FC<IncidentDetailModalProps> = ({
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <span
-                    className={`px-2 py-0.5 rounded-xl text-xs font-medium border ${
-                      severityColors[incident.severity]
-                    }`}
+                    className={`px-2 py-0.5 rounded-xl text-xs font-medium border ${severityColors[severity]}`}
                   >
-                    {incident.severity.toUpperCase()}
+                    {severity.toUpperCase()}
                   </span>
                   <span className="text-xs text-gray-500 flex items-center gap-1">
                     <Clock size={12} />
-                    {formatDate(incident.timestamp)} at{" "}
-                    {formatTime(incident.timestamp)}
+                    {formatDate(incident.createdAt)} at{" "}
+                    {formatTime(
+                      incident.createdAt ? new Date(incident.createdAt) : null
+                    )}
                   </span>
                 </div>
                 <h2 className="text-lg font-bold text-gray-800">
-                  {incident.title}
+                  {incident.type}
                 </h2>
               </div>
               <button
@@ -157,8 +225,7 @@ export const IncidentDetailModal: React.FC<IncidentDetailModalProps> = ({
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <MapPin size={16} className="text-sky-600 shrink-0" />
                 <span>
-                  {incident.latitude.toFixed(4)},{" "}
-                  {incident.longitude.toFixed(4)}
+                  {incident.lat.toFixed(4)}, {incident.lng.toFixed(4)}
                   {getDistance() && (
                     <span className="text-gray-400 ml-1">
                       • {getDistance()}
@@ -166,6 +233,37 @@ export const IncidentDetailModal: React.FC<IncidentDetailModalProps> = ({
                   )}
                 </span>
               </div>
+
+              {incident.status && incident.status !== "resolved" && (
+                <div className="flex gap-2 flex-wrap">
+                  {incident.status === "verified" && (
+                    <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm font-medium">
+                      ✓ Verified
+                    </span>
+                  )}
+                  {incident.status === "unverified" && (
+                    <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-sm font-medium">
+                      ⏳ Unverified
+                    </span>
+                  )}
+                  {incident.status === "false" && (
+                    <span className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm font-medium">
+                      ✗ False Report
+                    </span>
+                  )}
+                  {incident.confirmations > 0 && (
+                    <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium">
+                      👥 {incident.confirmations} confirmation
+                      {incident.confirmations > 1 ? "s" : ""}
+                    </span>
+                  )}
+                  {incident.trustScore > 1 && (
+                    <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg text-sm font-medium">
+                      ⭐ Trust: {incident.trustScore}
+                    </span>
+                  )}
+                </div>
+              )}
 
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-1">
@@ -237,6 +335,28 @@ export const IncidentDetailModal: React.FC<IncidentDetailModalProps> = ({
                 <Navigation size={18} />
                 Navigate to Location
               </button>
+
+              {/* Confirm / Mark False buttons - only show for admins on unverified incidents */}
+              {isAdmin && incident.status === "unverified" && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleConfirm}
+                    disabled={isConfirming}
+                    className="flex-1 py-2.5 bg-green-100 text-green-700 font-medium rounded-xl flex items-center justify-center gap-2 hover:bg-green-200 transition-colors disabled:opacity-50"
+                  >
+                    <ThumbsUp size={16} />
+                    {isConfirming ? "Confirming..." : "Confirm"}
+                  </button>
+                  <button
+                    onClick={handleMarkFalse}
+                    disabled={isMarkingFalse}
+                    className="flex-1 py-2.5 bg-red-100 text-red-700 font-medium rounded-xl flex items-center justify-center gap-2 hover:bg-red-200 transition-colors disabled:opacity-50"
+                  >
+                    <Flag size={16} />
+                    {isMarkingFalse ? "Marking..." : "False Report"}
+                  </button>
+                </div>
+              )}
 
               <div className="flex gap-2">
                 <button className="flex-1 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-xl flex items-center justify-center gap-2 hover:bg-gray-200 transition-colors">

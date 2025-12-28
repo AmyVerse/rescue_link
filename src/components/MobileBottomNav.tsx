@@ -1,6 +1,7 @@
-import { Home, Map, Plus, User } from "lucide-react";
+import { Home, Map, Plus, Shield, User } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
-type Page = "home" | "map" | "account";
+type Page = "home" | "map" | "account" | "admin";
 
 interface MobileBottomNavProps {
   activePage: Page;
@@ -13,6 +14,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   onPageChange,
   onAddIncident,
 }) => {
+  const { isAdmin } = useAuth();
+
   return (
     <>
       <button
@@ -27,7 +30,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         <div className="flex items-center justify-around py-1.5 px-2">
           <button
             onClick={() => onPageChange("home")}
-            className={`flex flex-col items-center gap-0.5 py-2 px-8 rounded-2xl transition-all ${
+            className={`flex flex-col items-center gap-0.5 py-2 px-6 rounded-2xl transition-all ${
               activePage === "home"
                 ? "text-sky-600 bg-sky-50"
                 : "text-gray-400 active:bg-gray-50"
@@ -39,7 +42,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
           <button
             onClick={() => onPageChange("map")}
-            className={`flex flex-col items-center gap-0.5 py-2 px-8 rounded-2xl transition-all ${
+            className={`flex flex-col items-center gap-0.5 py-2 px-6 rounded-2xl transition-all ${
               activePage === "map"
                 ? "text-sky-600 bg-sky-50"
                 : "text-gray-400 active:bg-gray-50"
@@ -49,9 +52,26 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             <span className="text-[10px] font-semibold">Map</span>
           </button>
 
+          {isAdmin && (
+            <button
+              onClick={() => onPageChange("admin")}
+              className={`flex flex-col items-center gap-0.5 py-2 px-6 rounded-2xl transition-all ${
+                activePage === "admin"
+                  ? "text-amber-600 bg-amber-50"
+                  : "text-gray-400 active:bg-gray-50"
+              }`}
+            >
+              <Shield
+                size={20}
+                strokeWidth={activePage === "admin" ? 2.5 : 1.5}
+              />
+              <span className="text-[10px] font-semibold">Admin</span>
+            </button>
+          )}
+
           <button
             onClick={() => onPageChange("account")}
-            className={`flex flex-col items-center gap-0.5 py-2 px-8 rounded-2xl transition-all ${
+            className={`flex flex-col items-center gap-0.5 py-2 px-6 rounded-2xl transition-all ${
               activePage === "account"
                 ? "text-sky-600 bg-sky-50"
                 : "text-gray-400 active:bg-gray-50"

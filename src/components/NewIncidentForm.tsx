@@ -2,9 +2,10 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   Camera,
+  Construction,
   Flame,
-  Home,
   MapPin,
+  Megaphone,
   Plus,
   Stethoscope,
   X,
@@ -55,12 +56,19 @@ const severityOptions = [
   },
 ];
 
+// Categories matching backend incident types
 const categoryOptions = [
-  { id: "fire", label: "Fire", icon: Flame },
-  { id: "accident", label: "Accident", icon: AlertTriangle },
-  { id: "medical", label: "Medical", icon: Stethoscope },
-  { id: "natural", label: "Natural Disaster", icon: Home },
-  { id: "other", label: "Other", icon: Plus },
+  { id: "fire", label: "Fire", icon: Flame, priority: 9 },
+  { id: "medical", label: "Medical", icon: Stethoscope, priority: 8 },
+  { id: "accident", label: "Accident", icon: AlertTriangle, priority: 7 },
+  {
+    id: "infrastructure",
+    label: "Infrastructure",
+    icon: Construction,
+    priority: 6,
+  },
+  { id: "disturbance", label: "Disturbance", icon: Megaphone, priority: 5 },
+  { id: "other", label: "Other", icon: Plus, priority: 4 },
 ];
 
 export const NewIncidentForm: React.FC<NewIncidentFormProps> = ({

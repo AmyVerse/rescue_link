@@ -1,6 +1,14 @@
 import { motion } from "framer-motion";
-import { AlertTriangle, Clock, Navigation, Users } from "lucide-react";
-import type { Incident } from "../types/incident";
+import {
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  Navigation,
+  XCircle,
+} from "lucide-react";
+import type { Incident } from "../services/api";
+import type { SeverityLevel } from "../types/incident";
+import { getSeverityFromIncident } from "../types/incident";
 import { calculateDistance, formatDistance } from "../utils/distance";
 
 interface IncidentCardProps {
@@ -11,7 +19,10 @@ interface IncidentCardProps {
   userLon?: number;
 }
 
-const severityStyles = {
+const severityStyles: Record<
+  SeverityLevel,
+  { border: string; selectedBg: string; badgeBg: string; badgeText: string }
+> = {
   critical: {
     border: "border-l-red-600",
     selectedBg: "bg-red-50",
@@ -45,8 +56,9 @@ export const IncidentCard: React.FC<IncidentCardProps> = ({
   userLat,
   userLon,
 }) => {
-  const formatTime = (date: Date) => {
-    return new Date(date).toLocaleTimeString("en-US", {
+  const formatTime = (dateStr?: string) => {
+    if (!dateStr) return "Just now";
+    return new Date(dateStr).toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -54,17 +66,11 @@ export const IncidentCard: React.FC<IncidentCardProps> = ({
 
   const distance =
     userLat && userLon
-      ? calculateDistance(
-          userLat,
-          userLon,
-          incident.latitude,
-          incident.longitude
-        )
+      ? calculateDistance(userLat, userLon, incident.lat, incident.lng)
       : null;
 
-  const styles =
-    severityStyles[incident.severity as keyof typeof severityStyles] ||
-    severityStyles.low;
+  const severity = getSeverityFromIncident(incident);
+  const styles = severityStyles[severity];
 
   return (
     <motion.div
@@ -84,7 +90,7 @@ export const IncidentCard: React.FC<IncidentCardProps> = ({
           className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md ${styles.badgeBg} ${styles.badgeText}`}
         >
           <AlertTriangle size={16} />
-          <span>{incident.severity.toUpperCase()}</span>
+          <span>{severity.toUpperCase()}</span>
         </div>
         <span className="text-xs text-gray-400 font-mono">
           #{incident.id.slice(0, 6)}
@@ -92,7 +98,7 @@ export const IncidentCard: React.FC<IncidentCardProps> = ({
       </div>
 
       <h3 className="text-sm font-semibold text-gray-800 my-2">
-        {incident.title}
+        {incident.type}
       </h3>
       <p className="text-sm text-gray-500 my-2 mb-3 leading-relaxed">
         {incident.description}
@@ -101,13 +107,28 @@ export const IncidentCard: React.FC<IncidentCardProps> = ({
       <div className="flex gap-3 my-3 py-2 border-t border-b border-gray-200">
         <div className="flex items-center gap-1.5 text-xs text-gray-500">
           <Clock size={14} className="text-gray-400" />
-          <span>{formatTime(incident.timestamp)}</span>
+          <span>{formatTime(incident.createdAt)}</span>
         </div>
-        {incident.responders && (
-          <div className="flex items-center gap-1.5 text-xs text-gray-500">
-            <Users size={14} className="text-gray-400" />
-            <span>{incident.responders} responders</span>
-          </div>
+        {incident.status === "verified" && (
+          <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+            <CheckCircle size={12} /> Verified
+          </span>
+        )}
+        {incident.status === "unverified" && (
+          <span className="text-xs text-yellow-600 font-medium">
+            ⏳ Unverified
+          </span>
+        )}
+        {incident.status === "false" && (
+          <span className="flex items-center gap-1 text-xs text-red-600 font-medium">
+            <XCircle size={12} /> False Report
+          </span>
+        )}
+        {incident.confirmations > 0 && (
+          <span className="text-xs text-blue-600 font-medium">
+            {incident.confirmations} confirmation
+            {incident.confirmations > 1 ? "s" : ""}
+          </span>
         )}
         {distance !== null && (
           <div className="flex items-center gap-1.5 text-xs text-gray-500">

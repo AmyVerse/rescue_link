@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from "react";
-import type { Incident } from "../types/incident";
+import type { Incident } from "../services/api";
+import { getSeverityFromIncident } from "../types/incident";
 
 const MapComponent = lazy(() =>
   import("./Map").then((m) => ({ default: m.MapComponent }))
@@ -55,19 +56,19 @@ export const MapPage: React.FC<MapPageProps> = ({
             <div>
               <span
                 className={`inline-block px-2 py-0.5 rounded-xl text-xs font-medium mb-1 ${
-                  selectedIncident.severity === "critical"
+                  getSeverityFromIncident(selectedIncident) === "critical"
                     ? "bg-red-100 text-red-700"
-                    : selectedIncident.severity === "high"
+                    : getSeverityFromIncident(selectedIncident) === "high"
                     ? "bg-orange-100 text-orange-700"
-                    : selectedIncident.severity === "medium"
+                    : getSeverityFromIncident(selectedIncident) === "medium"
                     ? "bg-yellow-100 text-yellow-700"
                     : "bg-green-100 text-green-700"
                 }`}
               >
-                {selectedIncident.severity.toUpperCase()}
+                {getSeverityFromIncident(selectedIncident).toUpperCase()}
               </span>
               <h3 className="font-semibold text-gray-800">
-                {selectedIncident.title}
+                {selectedIncident.type}
               </h3>
             </div>
             <button
@@ -92,11 +93,16 @@ export const MapPage: React.FC<MapPageProps> = ({
           </p>
           <div className="flex items-center justify-between text-xs text-gray-500">
             <span>
-              {selectedIncident.timestamp.toLocaleTimeString("en-US", {
-                hour: "numeric",
-                minute: "2-digit",
-                hour12: true,
-              })}
+              {selectedIncident.createdAt
+                ? new Date(selectedIncident.createdAt).toLocaleTimeString(
+                    "en-US",
+                    {
+                      hour: "numeric",
+                      minute: "2-digit",
+                      hour12: true,
+                    }
+                  )
+                : "Just now"}
             </span>
             <span className="flex items-center gap-1">
               <svg
@@ -108,8 +114,8 @@ export const MapPage: React.FC<MapPageProps> = ({
               >
                 <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
               </svg>
-              {selectedIncident.latitude.toFixed(3)},{" "}
-              {selectedIncident.longitude.toFixed(3)}
+              {selectedIncident.lat.toFixed(3)},{" "}
+              {selectedIncident.lng.toFixed(3)}
             </span>
           </div>
         </div>

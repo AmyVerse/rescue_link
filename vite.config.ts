@@ -5,6 +5,20 @@ import { VitePWA } from "vite-plugin-pwa";
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    proxy: {
+      "/api": {
+        target: "https://incident-k9fs.onrender.com",
+        changeOrigin: true,
+        secure: true,
+      },
+      "/socket.io": {
+        target: "https://incident-k9fs.onrender.com",
+        changeOrigin: true,
+        ws: true,
+      },
+    },
+  },
   build: {
     rollupOptions: {
       output: {

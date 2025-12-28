@@ -1,5 +1,5 @@
-import { Home, Map, User } from "lucide-react";
-import { Component, type ReactNode, useState } from "react";
+import { Home, Map, Shield, User } from "lucide-react";
+import { Component, type ReactNode, useEffect, useState } from "react";
 import {
   Route,
   Routes,
@@ -8,6 +8,7 @@ import {
   useParams,
 } from "react-router-dom";
 import { AccountPage } from "./components/AccountPage";
+import { AdminDashboard } from "./components/AdminDashboard";
 import Dock from "./components/Dock";
 import { EmergencyModal } from "./components/EmergencyModal";
 import { HomePage } from "./components/HomePage";
@@ -16,15 +17,11 @@ import { MapPage } from "./components/MapPage";
 import { MobileBottomNav } from "./components/MobileBottomNav";
 import { MobileHeader } from "./components/MobileHeader";
 import { NewIncidentForm } from "./components/NewIncidentForm";
-import incidentsData from "./data/incidents.json";
+import { useAuth } from "./context/AuthContext";
 import { useGeolocation } from "./hooks/useGeolocation";
-import type { Incident } from "./types/incident";
-
-const INCIDENTS: Incident[] = incidentsData.map((incident) => ({
-  ...incident,
-  severity: incident.severity as Incident["severity"],
-  timestamp: new Date(incident.timestamp),
-}));
+import type { CreateIncidentPayload, Incident } from "./services/api";
+import { api, socketService } from "./services/api";
+import { incidentCache } from "./utils/cache";
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -58,7 +55,7 @@ class ErrorBoundary extends Component<
   }
 }
 
-type Page = "home" | "map" | "account";
+type Page = "home" | "map" | "account" | "admin";
 
 function MapRouteWrapper({
   incidents,
@@ -90,16 +87,22 @@ function MapRouteWrapper({
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAdmin } = useAuth();
 
   const currentPage: Page = location.pathname.startsWith("/map")
     ? "map"
     : location.pathname === "/account"
     ? "account"
+    : location.pathname === "/admin"
+    ? "admin"
     : "home";
 
   const [detailIncident, setDetailIncident] = useState<Incident | null>(null);
   const [showNewIncidentForm, setShowNewIncidentForm] = useState(false);
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [loadingIncidents, setLoadingIncidents] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const {
     latitude,
@@ -111,6 +114,69 @@ function App() {
 
   const userLocation =
     latitude && longitude ? { latitude, longitude, address } : null;
+
+  // Fetch incidents and setup socket connection when location is available
+  useEffect(() => {
+    if (!latitude || !longitude) return;
+
+    const fetchIncidents = async (skipCache = false) => {
+      // Try to load from cache first for instant display
+      if (!skipCache) {
+        const cached = incidentCache.get(latitude, longitude);
+        if (cached && cached.length > 0) {
+          setIncidents(cached);
+          setLoadingIncidents(false);
+          // Still fetch fresh data in background
+          setIsRefreshing(true);
+        }
+      }
+
+      try {
+        if (!skipCache && incidents.length === 0) {
+          setLoadingIncidents(true);
+        }
+        const data = await api.getNearbyIncidents(latitude, longitude);
+        setIncidents(data);
+        // Cache the fresh data
+        incidentCache.set(data, latitude, longitude);
+      } catch (error) {
+        console.error("Failed to fetch incidents:", error);
+      } finally {
+        setLoadingIncidents(false);
+        setIsRefreshing(false);
+      }
+    };
+
+    fetchIncidents();
+
+    // Setup socket connection
+    socketService.connect();
+    socketService.joinArea(latitude, longitude);
+
+    socketService.onNewIncident((incident) => {
+      setIncidents((prev) => {
+        const updated = [incident, ...prev];
+        incidentCache.update(updated);
+        return updated;
+      });
+    });
+
+    socketService.onIncidentUpdate((updated) => {
+      setIncidents((prev) => {
+        const newList = prev.map((inc) =>
+          inc.id === updated.id ? updated : inc
+        );
+        incidentCache.update(newList);
+        return newList;
+      });
+    });
+
+    return () => {
+      socketService.offNewIncident();
+      socketService.offIncidentUpdate();
+      socketService.disconnect();
+    };
+  }, [latitude, longitude]);
 
   const navigateToIncident = (incident: Incident) => {
     navigate(`/map/${incident.id}`);
@@ -128,12 +194,47 @@ function App() {
       case "account":
         navigate("/account");
         break;
+      case "admin":
+        navigate("/admin");
+        break;
     }
   };
 
-  const handleNewIncidentSubmit = (data: unknown) => {
-    console.log("New incident submitted:", data);
-    alert("Incident reported! (Demo - no actual submission)");
+  const handleNewIncidentSubmit = async (data: {
+    title: string;
+    description: string;
+    category: string;
+    latitude: number;
+    longitude: number;
+  }) => {
+    try {
+      const payload: CreateIncidentPayload = {
+        type: data.category || data.title,
+        description: data.description,
+        lat: data.latitude,
+        lng: data.longitude,
+      };
+      const response = await api.createIncident(payload);
+
+      if (response.isDuplicate) {
+        // Update existing incident in list
+        setIncidents((prev) =>
+          prev.map((inc) =>
+            inc.id === response.incident.id ? response.incident : inc
+          )
+        );
+        alert(
+          response.message ||
+            "Similar incident already reported. Your confirmation has been added!"
+        );
+      } else {
+        // Add new incident to list
+        setIncidents((prev) => [response.incident, ...prev]);
+      }
+    } catch (error) {
+      console.error("Failed to create incident:", error);
+      alert("Failed to report incident. Please try again.");
+    }
   };
 
   const dockItems = [
@@ -149,6 +250,16 @@ function App() {
       onClick: () => handlePageChange("map"),
       isActive: currentPage === "map",
     },
+    ...(isAdmin
+      ? [
+          {
+            icon: <Shield size={20} />,
+            label: "Admin",
+            onClick: () => handlePageChange("admin"),
+            isActive: currentPage === "admin",
+          },
+        ]
+      : []),
     {
       icon: <User size={20} />,
       label: "Account",
@@ -218,10 +329,12 @@ function App() {
               path="/"
               element={
                 <HomePage
-                  incidents={INCIDENTS}
+                  incidents={incidents}
                   userLocation={userLocation}
                   onIncidentClick={(incident) => setDetailIncident(incident)}
                   onNavigate={navigateToIncident}
+                  isLoading={loadingIncidents}
+                  isRefreshing={isRefreshing}
                 />
               }
             />
@@ -229,12 +342,20 @@ function App() {
               path="/map/:id?"
               element={
                 <MapRouteWrapper
-                  incidents={INCIDENTS}
+                  incidents={incidents}
                   userLocation={userLocation}
                 />
               }
             />
             <Route path="/account" element={<AccountPage />} />
+            <Route
+              path="/admin"
+              element={
+                <AdminDashboard
+                  onIncidentClick={(incident) => setDetailIncident(incident)}
+                />
+              }
+            />
           </Routes>
         </div>
 
@@ -265,6 +386,12 @@ function App() {
           onClose={() => setDetailIncident(null)}
           onNavigate={navigateToIncident}
           userLocation={userLocation}
+          onUpdate={(updated) => {
+            setIncidents((prev) =>
+              prev.map((inc) => (inc.id === updated.id ? updated : inc))
+            );
+            setDetailIncident(updated);
+          }}
         />
       </div>
     </ErrorBoundary>
